@@ -1,0 +1,72 @@
+// ISC License
+//
+// Copyright (c) 2017, aeternity developers
+//
+// Permission to use, copy, modify, and/or distribute this software for any
+// purpose with or without fee is hereby granted, provided that the above
+// copyright notice and this permission notice appear in all copies.
+//
+// THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+// REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+// AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+// INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+// LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
+// OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+// PERFORMANCE OF THIS SOFTWARE.
+
+
+// THIS IS NOT SECURITY AUDITED
+// DO NEVER USE THIS WITHOUT SECURITY AUDIT FIRST
+
+@compiler >= 5
+
+// - Create a pool contract that accepts deposit from lenders , who earn interest on lending
+// - User  or borrower can borrow some amount of tokens (limited) , and pay back with some interest for some time period.
+// - lender can withdraw the amount later with some interest
+
+include "List.aes"
+include "Option.aes"
+//include "./IAEX9Minimal.aes"
+
+// interface of the tokens to be awarded as rewards for the user
+contract interface FungibleToken =
+  record meta_info ={ 
+    name : string
+    , symbol : string
+    , decimals : int 
+    }
+
+  record allowance_accounts = { from_account : address, for_account : address }
+  type allowances = map(allowance_accounts, int)
+
+  datatype event =
+    Transfer(address, address, int)
+    | Allowance(address, address, int)
+//    | Burn(address, int)
+//    | Mint(address, int)
+//    | Swap(address, int)
+
+  entrypoint aex9_extensions               : ()                      => list(string)
+  entrypoint meta_info                     : ()                      => meta_info
+  entrypoint total_supply                  : ()                      => int
+  entrypoint owner                         : ()                      => address
+  entrypoint balances                      : ()                      => map(address, int)
+  entrypoint balance                       : (address)               => option(int)
+  stateful entrypoint transfer             : (address, int)          => unit
+  stateful entrypoint transferFrom         : (address, address, int) => unit
+  entrypoint allowances                    : ()                      => allowances
+  entrypoint allowance                     : (allowance_accounts)    => option(int)
+  entrypoint allowance_for_caller          : (address)               => option(int)
+  stateful entrypoint transfer_allowance   : (address, address, int) => unit
+  stateful entrypoint create_allowance     : (address, int)          => unit
+  stateful entrypoint change_allowance     : (address, int)          => unit
+  stateful entrypoint reset_allowance      : (address)               => unit
+  //stateful entrypoint burn                 : (int)                   => unit
+  //stateful entrypoint mint                 : (address, int)          => unit
+  //stateful entrypoint swap                 : ()                      => unit
+  //entrypoint check_swap                    : (address)               => int
+  //entrypoint swapped                       : ()                      => map(address, int)
+
+
+contract Staking =
+    

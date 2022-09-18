@@ -1,0 +1,225 @@
+// ISC License
+//
+// Copyright (c) 2017, aeternity developers
+//
+// Permission to use, copy, modify, and/or distribute this software for any
+// purpose with or without fee is hereby granted, provided that the above
+// copyright notice and this permission notice appear in all copies.
+//
+// THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+// REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+// AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+// INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+// LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
+// OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+// PERFORMANCE OF THIS SOFTWARE.
+
+
+// THIS IS NOT SECURITY AUDITED
+// DO NEVER USE THIS WITHOUT SECURITY AUDIT FIRST
+
+@compiler >= 5
+
+// - Create a pool contract that accepts deposit from lenders , who earn interest on lending
+// - User  or borrower can borrow some amount of tokens (limited) , and pay back with some interest for some time period.
+// - lender can withdraw the amount later with some interest
+
+include "List.aes"
+include "Option.aes"
+//include "./IAEX9Minimal.aes"
+
+// interface of the tokens to be awarded as rewards for the user
+contract interface FungibleToken =
+  record meta_info ={ 
+    name : string
+    , symbol : string
+    , decimals : int 
+    }
+
+  record allowance_accounts = { from_account : address, for_account : address }
+  type allowances = map(allowance_accounts, int)
+
+  datatype event =
+    Transfer(address, address, int)
+    | Allowance(address, address, int)
+//    | Burn(address, int)
+//    | Mint(address, int)
+//    | Swap(address, int)
+
+  entrypoint aex9_extensions               : ()                      => list(string)
+  entrypoint meta_info                     : ()                      => meta_info
+  entrypoint total_supply                  : ()                      => int
+  entrypoint owner                         : ()                      => address
+  entrypoint balances                      : ()                      => map(address, int)
+  entrypoint balance                       : (address)               => option(int)
+  stateful entrypoint transfer             : (address, int)          => unit
+  stateful entrypoint transferFrom         : (address, address, int) => unit
+  entrypoint allowances                    : ()                      => allowances
+  entrypoint allowance                     : (allowance_accounts)    => option(int)
+  entrypoint allowance_for_caller          : (address)               => option(int)
+  stateful entrypoint transfer_allowance   : (address, address, int) => unit
+  stateful entrypoint create_allowance     : (address, int)          => unit
+  stateful entrypoint change_allowance     : (address, int)          => unit
+  stateful entrypoint reset_allowance      : (address)               => unit
+  //stateful entrypoint burn                 : (int)                   => unit
+  //stateful entrypoint mint                 : (address, int)          => unit
+  //stateful entrypoint swap                 : ()                      => unit
+  //entrypoint check_swap                    : (address)               => int
+  //entrypoint swapped                       : ()                      => map(address, int)
+
+
+contract LiquidityPool =
+    /// intialize token
+    type token = address
+
+    record amount = {
+              amount   : int
+            , start    : int
+    }
+
+    // This is a type alias to check if the address has lended any amount
+    type lendAmount = map(address, amount)
+
+    // This is a type alias for the interest earned by the lender
+    type earnedInterest = map(address, int)
+
+    // This is a type alias to store the info about lender & borrowers
+    type lenders = map(address, bool)
+    type borrowers = map(address, bool)
+
+    // This is a type alias to check if the address has borrowed any amount
+    type borrowAmount = map(address, amount)
+
+    // This is a type alias for the interest to be paid by the borrower
+    type payInterest = map(address, int)
+
+
+    record state = {
+              //token area
+              total_supply      : int
+            , lendAmount        : lendAmount
+            , earnedInterest    : earnedInterest
+            , lenders           : lenders
+            , borrowers         : borrowers
+            , borrowAmount      : borrowAmount
+            , payInterest       : payInterest  
+            , lendRate          : int
+            , borrowRate        : int
+            , periodBorrowed    : int
+            , amount_           : int
+            , start_            : int
+            , _amount           : int
+            , token             : address
+            , debug_time        : option(int)
+    }
+
+
+    entrypoint init(
+          token: address
+        , debug_time: option(int)       // If this is set to Some(...) the pair will enter in debug mode
+                                        // and `timestamp()` will get the value from it. After this point,
+                                        // to modify it's value `set_debug_time` should be called.
+                                        // Otherwise if the contract initialization sets `debug_time` to `None`,
+                                        // `timestamp()` will be reflected by the Chain.timestamp
+                                        // and any further set_debug_time call will result with an error
+        ) = {
+              total_supply           = 0
+            , lendAmount             = {}
+            , earnedInterest         = {}
+            , lenders                = {}
+            , borrowers              = {}
+            , borrowAmount           = {}  
+            , payInterest            = {}
+            , lendRate               = 100
+            , borrowRate             = 130
+            , periodBorrowed         = 0
+            , amount_                = 0
+            , start_                 = 0
+            , _amount                = 0
+            , token                  = FungibleToken(_tokenAddress)
+            , debug_time             = debug_time
+        }
+
+    //------------------------------------------------------------------------------
+    // VIEWERS
+    //------------------------------------------------------------------------------
+
+    entrypoint meta_info(): IAEX9Minimal.meta_info =
+        let meta = state.token.meta_info()
+        {   name     = meta.name
+          , symbol   = meta.symbol
+          , decimals = 18 }
+
+    entrypoint aex9_extensions() : list(string) = ["allowances"]
+
+    entrypoint total_supply() : int = state.total_supply
+
+    entrypoint token() = state.token
+
+
+    stateful entrypoint set_debug_time(time: int) =
+        require_positive([time])
+        require(Option.is_some(state.debug_time), "AedexV2Pair: NOT_DEBUG_MODE")
+        put( state { debug_time = Some(time) } )
+
+
+    /// @dev - to lend the amount by  , add liquidity
+    /// @param _amount - the amount to be lender
+    payable stateful entrypoint lend(_amount: int): unit =
+        require_positive([_amount])
+        token.transferFrom(Call.caller, Call.origin, _amount)
+
+        put(lendAmount[Call.caller].amount = _amount )
+        put(lendAmount[Call.caller].start  = Chain.timestamp )
+        put(lenders[Call.caller]           = true )
+        
+        put(totalSupply     = totalSupply + _amount )
+    
+
+
+    /// @dev - to borrow token
+    /// @param _amount - amount to be withdraw
+
+    payable stateful entrypoint borrow(_amount: int): unit =
+        require_positive([_amount])
+        put(borrowAmount[Call.caller].amount = _amount )
+        put(borrrowAmount[Call.caller].start = Chain.timestamp )
+        put(totalSupply                 = totalSupply - _amount )
+
+        token.transfer(Call.caller, _amount)
+        put(borrowers[Call.caller]           = true )
+    
+
+    /// @dev  - repay the whole loan
+    payable stateful entrypoint repay(): unit =  
+        require(borrowers[Call.caller], " not a borrower")
+        put(amount_ = borrowAmount[Call.caller].amount )
+        put(start_ = borrowAmount[Call.caller].start )
+        put(_amount = (amount_ + (amount_ * ((Chain.timestamp - start_) * borrowRate * 1e18)) / totalSupply)
+
+        require(_amount != 0, " amount can not be 0")
+
+        token.transferFrom(Call.caller, Call.origin, _amount)
+
+        put(borrowAmount[msg.sender] = {} )
+        put(borrowers[msg.sender]    = false )
+        
+        put(totalSupply = totalSupply + _amount )
+
+
+    /// @dev  - to withdraw the amount for the lender
+    payable stateful entrypoint withdraw(): unit =  
+        require(lenders[Call.caller], " you are not a lender")
+
+        put(amount_ = lendAmount[Call.caller].amount )
+        put(start_ = lendAmount[Call.caller].start )
+        put(_amount = (amount_ + (amount_ * ((Chain.timestamp - start_) * lendRate * 1e18)) / totalSupply)
+
+        require(_amount != 0, " amount can not be 0")
+
+        put(lendAmount[msg.sender] = {} )
+        put(lenders[msg.sender]    = false )
+        
+        put(totalSupply = totalSupply - _amount )
+
+        token.transferFrom(Call.caller, _amount)

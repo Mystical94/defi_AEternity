@@ -1,0 +1,151 @@
+// ISC License
+//
+// Copyright (c) 2017, aeternity developers
+//
+// Permission to use, copy, modify, and/or distribute this software for any
+// purpose with or without fee is hereby granted, provided that the above
+// copyright notice and this permission notice appear in all copies.
+//
+// THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+// REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+// AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+// INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+// LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
+// OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+// PERFORMANCE OF THIS SOFTWARE.
+
+
+// THIS IS NOT SECURITY AUDITED
+// DO NEVER USE THIS WITHOUT SECURITY AUDIT FIRST
+
+@compiler >= 5
+
+/// user can deposit his money
+/// it wll mint some share
+/// vault generate some yield
+/// user can withdraw the shares with the increased amount
+
+contract Vault =
+    //IERC20 public immutable token;
+    type token = address
+
+    type balanceOf = map(address, int)
+
+    record state = {
+              //token area
+              total_supply      : int
+            , balanceOf         : balanceOf
+            , token             : FungibleToken(_tokenAddress)
+    }
+
+    entrypoint init(
+          token: address
+        ) = {
+              total_supply           = 0
+            , balanceOf              = {}
+            , token                  = FungibleToken(_tokenAddress)
+        }
+
+    payable stateful entrypoint lend(_amount: int): unit =
+        require_positive([_amount])
+        token.transferFrom(Call.caller, Call.origin, _amount)
+
+        put(lendAmount[Call.caller].amount = _amount )
+        put(lendAmount[Call.caller].start  = Chain.timestamp )
+        put(lenders[Call.caller]           = true )
+        
+        put(totalSupply     = totalSupply + _amount )
+    
+
+    payable stateful entrypoint mint(_to: address, shares: int) unit =
+        put(totalSupply = totalSupply + shares )
+        put(balanceOf[_to] = balanceOf[_to] + shares)
+    
+
+    payable stateful entrypoint burn(_from: address, shares: int) unit =
+        put(totalSupply = totalSupply - shares )
+        put(balanceOf[_from] = balanceOf[_from] - shares)
+
+    payable stateful entrypoint deposit(_amount: int) unit =
+        let shares
+        if (totalSupply == 0)
+            put(shares = _amount)
+        else
+            put(shares = (_amount * totalSupply) / token.balanceOf(address(Call.origin))
+            mint(Call.caller, shares)
+            token.transferFrom(Call.caller, Call.origin, _amount)
+
+
+    payable stateful entrypoint withdraw(_shares: int) unit =
+            put(amount = (_shares * token.balanceOf(address(this))) /  totalSupply
+            burn(Call.caller, _shares)
+            token.transfer(Call.caller, amount)
+
+
+contract interface FungibleToken =
+  record meta_info ={ 
+    name : string
+    , symbol : string
+    , decimals : int 
+    }
+
+  record allowance_accounts = { from_account : address, for_account : address }
+  type allowances = map(allowance_accounts, int)
+
+  datatype event =
+    Transfer(address, address, int)
+    | Allowance(address, address, int)
+//    | Burn(address, int)
+//    | Mint(address, int)
+//    | Swap(address, int)
+
+  entrypoint aex9_extensions               : ()                      => list(string)
+  entrypoint meta_info                     : ()                      => meta_info
+  entrypoint total_supply                  : ()                      => int
+  entrypoint balanceOf                     : ()                      => map(address, int)
+  entrypoint balance                       : (address)               => option(int)
+  stateful entrypoint transfer             : (address, int)          => unit
+  stateful entrypoint transferFrom         : (address, address, int) => unit
+  entrypoint allowances                    : ()                      => allowances
+  entrypoint allowance                     : (allowance_accounts)    => option(int)
+  entrypoint allowance_for_caller          : (address)               => option(int)
+  stateful entrypoint transfer_allowance   : (address, address, int) => unit
+  stateful entrypoint create_allowance     : (address, int)          => unit
+  stateful entrypoint change_allowance     : (address, int)          => unit
+  stateful entrypoint reset_allowance      : (address)               => unit
+  //stateful entrypoint burn                 : (int)                   => unit
+  //stateful entrypoint mint                 : (address, int)          => unit
+  //stateful entrypoint swap                 : ()                      => unit
+  //entrypoint check_swap                    : (address)               => int
+  //entrypoint swapped                       : ()                      => map(address, int)
+
+
+/*interface IERC20 {
+    function totalSupply() external view returns (uint256);
+
+    function balanceOf(address account) external view returns (uint256);
+
+    function transfer(address recipient, uint256 amount)
+        external
+        returns (bool);
+
+    function allowance(address owner, address spender)
+        external
+        view
+        returns (uint256);
+
+    function approve(address spender, uint256 amount) external returns (bool);
+
+    function transferFrom(
+        address sender,
+        address recipient,
+        uint256 amount
+    ) external returns (bool);
+
+    event Transfer(address indexed from, address indexed to, uint256 amount);
+    event Approval(
+        address indexed owner,
+        address indexed spender,
+        uint256 amount
+    );
+}
