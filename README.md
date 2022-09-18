@@ -2,15 +2,6 @@
 
 A collection of three DEFI contracts, namely Staking, Lending Pool, and Vault, which are required as the first step in developing a DEFI protocol.
 
-## Staking Contract
-
---> Rewards user for staking their tokens in the contract
-
-- User can withdraw and deposit at an point of time
-- Tokens Earned can be withdrawed any time
-- Rewards are calculated with reward rate and time period staked for
-- The balance and reward earned can be checked at any point of time
-
 ## Lending Pool Contract
 
 --> Create a pool contract that accepts deposit from lenders and borrow money to the borrowers
@@ -29,3 +20,12 @@ A collection of three DEFI contracts, namely Staking, Lending Pool, and Vault, w
 - Some shares are minted according to the value deposited
 - Vault generate some yield by a puropose and the value of share increases
 - user can withdraw the amount by burning those share at any point of time .
+
+## Staking Contract
+
+--> Rewards user for staking their tokens in the contract
+
+- User can withdraw and deposit at an point of time
+- Tokens Earned can be withdrawed any time
+- Rewards are calculated with reward rate and time period staked for
+- The balance and reward earned can be checked at any point of time
