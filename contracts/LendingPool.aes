@@ -75,7 +75,7 @@ contract LiquidityPool =
     record amount = {
               amount   : int
             , start    : int
-    }
+            }
 
     // This is a type alias to check if the address has lended any amount
     type lendAmount = map(address, amount)
@@ -111,7 +111,7 @@ contract LiquidityPool =
             , _amount           : int
             , token             : address
             , debug_time        : option(int)
-    }
+            }
 
 
     entrypoint init(

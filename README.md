@@ -29,3 +29,41 @@ A collection of three DEFI contracts, namely Staking, Lending Pool, and Vault, w
 - Tokens Earned can be withdrawed any time
 - Rewards are calculated with reward rate and time period staked for
 - The balance and reward earned can be checked at any point of time
+
+## Local Development
+
+Clone the repository
+
+move into the frontend folder
+
+```sh
+cd frontend
+```
+
+install dependencies using **yarn** or **npm**
+
+```sh
+npm install
+
+or
+
+yarn
+```
+
+start the development server
+```sh
+npm run dev
+
+or
+
+yarn dev
+```
+
+build with production mode
+```sh
+npm run build
+
+or
+
+yarn build
+```
