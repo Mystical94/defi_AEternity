@@ -44,9 +44,9 @@ contract Vault =
               total_supply           = 0
             , balanceOf              = {}
             , token                  = FungibleToken(_tokenAddress)
-        }
-
-    payable stateful entrypoint lend(_amount: int): unit =
+   }
+        
+    payable stateful entrypoint lend(_amount: int) =
         require_positive([_amount])
         token.transferFrom(Call.caller, Call.origin, _amount)
 

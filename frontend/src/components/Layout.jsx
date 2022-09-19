@@ -49,10 +49,10 @@ export default function Layout({ children }) {
                 <a
                 //   target="_blank"
                 //   rel="noopener noreferrer"
-                  href="#vault"
+                  href="#staking"
                   className={styles.navlink}
                 >
-                  Vault
+                  Staking
                 </a>
               </span>
             </li>
@@ -61,10 +61,10 @@ export default function Layout({ children }) {
                 <a
                 //   target="_blank"
                 //   rel="noopener noreferrer"
-                  href="#staking"
+                  href="#vault"
                   className={styles.navlink}
                 >
-                  Staking
+                  Vault
                 </a>
               </span>
             </li>

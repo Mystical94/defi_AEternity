@@ -246,13 +246,179 @@ export default function Home() {
           token.transferFrom(Call.caller, _amount)
       `;
 
-  const staking = `*********************************************************************************************
-
-
-                                        Coming Soon...
-
-
-*********************************************************************************************`;
+  const staking = `// ISC License
+  //
+  // Copyright (c) 2017, aeternity developers
+  //
+  // Permission to use, copy, modify, and/or distribute this software for any
+  // purpose with or without fee is hereby granted, provided that the above
+  // copyright notice and this permission notice appear in all copies.
+  //
+  // THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES WITH
+  // REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF MERCHANTABILITY
+  // AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT,
+  // INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM
+  // LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE
+  // OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+  // PERFORMANCE OF THIS SOFTWARE.
+  
+  
+  // THIS IS NOT SECURITY AUDITED
+  // DO NEVER USE THIS WITHOUT SECURITY AUDIT FIRST
+  
+  // ISC License
+  
+  @compiler >= 5
+  
+  include "Option.aes"
+  include "List.aes"
+  
+  payable contract Stake =
+    record state =
+    { owner : address,
+        contract_address : address,
+        currentPositionId : int,
+        tiers : map(int, int),
+        lockPeriods : map(int, int),
+        lockPeriodsIndex : int,
+        borrowPositionId : int,
+        positions : map(int, position),
+        borrowers : map(int, borrower),
+        borrowerIdByAddress: map(address, int),
+        positionIdsByAddress: map(address, list(int))}
+  
+    record position = { 
+      positionId : int,
+      walletAddress : address,
+      createdDate : int,
+      unlockDate : int,
+      percentInterest : int,
+      aeStaked : int,
+      aeInterest : int,
+      open : bool}
+    
+    record borrower = { 
+      positionId : int,
+      walletAddress : address,
+      createdDate : int,
+      endDate : int,
+      percentInterest : int,
+      aeBorrowed : int,
+      aeInterest : int,
+      paid : bool}
+  
+    // Declaration and structure of datatype event
+    // and events that will be emitted on changes
+    datatype event = Stake(int, address, int) | Withdraw(int, address, int) | Borrow(address, int, int) | Paid(address, int, bool)
+  
+    stateful entrypoint init() : state  =
+    { owner = Call.caller, borrowPositionId = 1, borrowers = {}, contract_address = Contract.address, lockPeriodsIndex = 3, positions = {}, currentPositionId = 0, tiers = {[30] = 700, [90] = 1000, [180] = 1200}, lockPeriods = {[0] = 30, [1] = 90, [2] = 180}, positionIdsByAddress = {}, borrowerIdByAddress = {} }
+  
+    entrypoint owner() : address =
+      state.owner
+  
+    entrypoint contract_tiers(value: int) : int =
+      state.tiers[value]
+    
+    entrypoint contract_lockPeriods(value: int) : int =
+      state.lockPeriods[value]
+  
+    entrypoint contract_currentPositionId() : int =
+      state.currentPositionId
+  
+    payable stateful entrypoint stakeAE(numDays: int) =
+      require(state.tiers[numDays] > 0, "Mapping not found")
+      let new_position : position = {
+          positionId = state.currentPositionId,
+          walletAddress = Call.caller,
+          createdDate = Chain.timestamp,
+          unlockDate = Chain.timestamp + ( numDays * 86400),
+          percentInterest = state.tiers[numDays],
+          aeStaked = Call.value,
+          aeInterest = calculateInterest(state.tiers[numDays], Call.value),
+          open = true}
+  
+      put(state{positions[state.currentPositionId] = new_position})
+      put(state{currentPositionId = state.currentPositionId + 1 })
+      let newPositionIdsByAddress = state.positionIdsByAddress{[Call.caller = []] @ positions = positions ++ [state.currentPositionId]}
+      put(state{positionIdsByAddress = newPositionIdsByAddress })
+      Chain.spend(Contract.address, Call.value)
+      Chain.event(Stake(state.currentPositionId, Call.caller, calculateInterest(state.tiers[numDays], Call.value)))
+  
+    entrypoint calculateInterest(basisPoints: int, aeAmount : int) : int =
+     ( basisPoints * aeAmount )
+  
+    stateful entrypoint modifyLockPeriods(numDays: int, basisPoints : int) =
+      require(Call.caller == state.owner, "The caller is different than the owner")
+      
+      put(state{tiers[numDays] = basisPoints})
+      put(state{lockPeriods[state.lockPeriodsIndex] = numDays})
+      put(state{lockPeriodsIndex = state.lockPeriodsIndex + 1 })
+  
+    entrypoint getInterestRate(value: int) : int =
+      state.tiers[value]
+    
+    entrypoint getPositionById(positionId: int) : position =
+      state.positions[positionId]
+  
+    entrypoint getPositionIdForAddress(walletAddress : address) : list(int) =
+      state.positionIdsByAddress[walletAddress]
+  
+    entrypoint getPositionIdForBorrower(walletAddress : address) : int =
+      state.borrowerIdByAddress[walletAddress]
+  
+    entrypoint caller_balance() : int = Chain.balance(Call.caller)
+  
+    entrypoint getContactAddress() : address =
+      state.contract_address
+  
+    entrypoint getContactBalance() : int = Chain.balance(state.contract_address)
+  
+    stateful entrypoint changeUnlockDate(positionId : int, newUnlockDate : int) =
+      require(state.owner == Call.caller, "Only owner may modify staking period")
+      put(state{positions[positionId].unlockDate = newUnlockDate })
+    
+    stateful entrypoint closePosition(positionId : int) =
+      require(state.positions[positionId].walletAddress == Call.caller, "only position creator may modify positon")
+      require(state.positions[positionId].open == true, "Position is closed")
+      put(state{positions[positionId].open = false})
+  
+      if(Chain.timestamp > state.positions[positionId].unlockDate)
+        let amount = state.positions[positionId].aeStaked + ( state.positions[positionId].aeInterest / 10000 )
+        Chain.spend(Call.caller, amount)
+        Chain.event(Withdraw(positionId, Call.caller, amount))
+      else
+        Chain.spend(Call.caller, state.positions[positionId].aeStaked)
+        Chain.event(Withdraw(positionId, Call.caller, state.positions[positionId].aeStaked))
+    
+    stateful entrypoint borrowFunds(amount : int, sendTo : address, endDate : int) =
+      require(state.owner == Call.caller, "Only owner can create a borrower")
+      let new_borrower : borrower = {
+          positionId = state.borrowPositionId,
+          walletAddress = sendTo,
+          createdDate = Chain.timestamp,
+          endDate = Chain.timestamp + ( endDate * 86400),
+          percentInterest = 4000,
+          aeBorrowed = amount,
+          aeInterest =  (8 * amount) / 100,
+          paid = false}
+  
+      put(state{borrowers[state.borrowPositionId] = new_borrower})
+      put(state{borrowerIdByAddress[sendTo] = state.borrowPositionId })
+      Chain.event(Borrow(sendTo, amount, state.borrowPositionId))
+      put(state{borrowPositionId = state.borrowPositionId + 1})
+      Chain.spend(sendTo, amount)
+  
+    payable stateful entrypoint payBorrowedFund(borrower : address) =
+      require(state.borrowerIdByAddress[borrower] > 0, "Key does not exist")
+      let borrowerId = getPositionIdForBorrower(borrower)
+      let amount = state.borrowers[borrowerId].aeInterest + state.borrowers[borrowerId].aeBorrowed
+      require(Call.value >= amount, "amount is not complete")
+      require(state.borrowers[borrowerId].paid == false, "debts has been paid")
+  
+      put(state{borrowers[borrowerId].paid = true})
+      Chain.spend(Contract.address, Call.value)
+      Chain.event(Paid(Contract.address, Call.value, state.borrowers[borrowerId].paid))`;
 
   const vault = `// ISC License
   //
@@ -427,35 +593,6 @@ export default function Home() {
           </pre>
         </span>
 
-        <p id="vault" className={styles.contract}>
-          Vault Contract
-        </p>
-         <span className={styles.features}>
-         <ul>
-            <li> Sharing of Yield For the no. of shares owned</li>
-            <li>User can deposit their money</li>
-            <li>Some shares are minted according to the value deposited</li>
-            <li>Vault generate some yield by a puropose and the value of share increases</li>
-            <li>user can withdraw the amount by burning those share at any point of time .</li>
-          </ul>
-          
-        </span>
-        <button className={styles.button}>
-          <a
-            target="_blank"
-            rel="noopener noreferrer"
-            href="https://github.com/Mystical94/defi_AEternity/blob/main/contracts/Vault.aes"
-            className={styles.navlink}
-          >
-            View on GitHub ↗
-          </a>
-        </button>
-        <span className={styles.code}>
-          <pre className="line-numbers">
-            <code className="language-jsx">{vault}</code>
-          </pre>
-        </span>
-
         <p id="staking" className={styles.contract}>
           Staking Contract
         </p>
@@ -489,10 +626,39 @@ export default function Home() {
           </pre>
         </span>
 
-        <p id="staking" className={styles.contract}>
+        <p id="vault" className={styles.contract}>
+          Vault Contract
+        </p>
+         <span className={styles.features}>
+         <ul>
+            <li> Sharing of Yield For the no. of shares owned</li>
+            <li>User can deposit their money</li>
+            <li>Some shares are minted according to the value deposited</li>
+            <li>Vault generate some yield by a puropose and the value of share increases</li>
+            <li>user can withdraw the amount by burning those share at any point of time .</li>
+          </ul>
+          
+        </span>
+        <button className={styles.button}>
+          <a
+            target="_blank"
+            rel="noopener noreferrer"
+            href="https://github.com/Mystical94/defi_AEternity/blob/main/contracts/Vault.aes"
+            className={styles.navlink}
+          >
+            View on GitHub ↗
+          </a>
+        </button>
+        <span className={styles.code}>
+          <pre className="line-numbers">
+            <code className="language-jsx">{vault}</code>
+          </pre>
+        </span>
+
+        <p id="vault" className={styles.contract}>
           More Contracts Coming Soon...So Stay Tuned 😉
         </p>
-        <p id="staking" className={styles.contract}>
+        <p id="vault" className={styles.contract}>
           æternity assemble
         </p>
       </main>

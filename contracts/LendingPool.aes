@@ -68,7 +68,7 @@ contract interface FungibleToken =
   //entrypoint swapped                       : ()                      => map(address, int)
 
 
-contract LiquidityPool =
+payable contract LiquidityPool =
     /// intialize token
     type token = address
 
@@ -165,7 +165,7 @@ contract LiquidityPool =
 
     /// @dev - to lend the amount by  , add liquidity
     /// @param _amount - the amount to be lender
-    payable stateful entrypoint lend(_amount: int): unit =
+    payable stateful entrypoint lend(_amount: int) =
         require_positive([_amount])
         token.transferFrom(Call.caller, Call.origin, _amount)
 
@@ -180,7 +180,7 @@ contract LiquidityPool =
     /// @dev - to borrow token
     /// @param _amount - amount to be withdraw
 
-    payable stateful entrypoint borrow(_amount: int): unit =
+    payable stateful entrypoint borrow(_amount: int) =
         require_positive([_amount])
         put(borrowAmount[Call.caller].amount = _amount )
         put(borrrowAmount[Call.caller].start = Chain.timestamp )
@@ -191,7 +191,7 @@ contract LiquidityPool =
     
 
     /// @dev  - repay the whole loan
-    payable stateful entrypoint repay(): unit =  
+    payable stateful entrypoint repay() =  
         require(borrowers[Call.caller], " not a borrower")
         put(amount_ = borrowAmount[Call.caller].amount )
         put(start_ = borrowAmount[Call.caller].start )
@@ -208,7 +208,7 @@ contract LiquidityPool =
 
 
     /// @dev  - to withdraw the amount for the lender
-    payable stateful entrypoint withdraw(): unit =  
+    payable stateful entrypoint withdraw() =  
         require(lenders[Call.caller], " you are not a lender")
 
         put(amount_ = lendAmount[Call.caller].amount )
